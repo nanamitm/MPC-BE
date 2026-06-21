@@ -378,7 +378,7 @@ bool CMPCVideoDecSettingsWnd::OnActivate()
 		m_chSwConvertToRGB.SetCheck(m_pMDF->GetSwConvertToRGB() ? BST_CHECKED : BST_UNCHECKED);
 		m_cbSwRGBLevels.SetCurSel(m_pMDF->GetSwRGBLevels());
 
-		str.Format(L"MPC Video Decoder %s", m_pMDF->GetInformation(INFO_MPCVersion));
+		str.Format(L"MPC Video Decoder (nanamitm) %s", m_pMDF->GetInformation(INFO_MPCVersion));
 		m_txtVersion.SetWindowTextW(str);
 
 		UpdateStatusInfo();
