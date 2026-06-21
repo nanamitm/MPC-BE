@@ -51,11 +51,11 @@
 // MPC_VERSION_STATUS: 0 - dev; 1 - stable
 
 #define MPC_YEAR_COMMENTS       "2002-2025"
-#define MPC_VERSION_COMMENTS    "https://sourceforge.net/projects/mpcbe/"
+#define MPC_VERSION_COMMENTS    "https://github.com/nanamitm/MPCVideoDec-fork"
 
 #ifndef ISPP_INVOKED
 
-#define MPC_COMP_NAME_STR       L"MPC-BE Team"
+#define MPC_COMP_NAME_STR       L"nanamitm (MPC-BE fork)"
 #define MPC_COPYRIGHT_STR       L"Copyright © 2002-2026 all contributors, see Authors.txt"
 
 #define MPC_VERSION_FULL_NUM    MPC_VERSION_MAJOR,MPC_VERSION_MINOR,MPC_VERSION_PATCH,MPC_VERSION_REV
