@@ -119,39 +119,3 @@ public:
 		: CInternalPropertyPage(lpunk, phr) {
 	}
 };
-
-class __declspec(uuid("A1EB391C-6089-4A87-9988-BE50872317D4"))
-	CPinInfoWnd : public CInternalPropertyPageWnd
-{
-	CComQIPtr<IBaseFilter> m_pBF;
-
-	enum {
-		IDC_PP_COMBO1 = 10000,
-		IDC_PP_EDIT1,
-	};
-
-	CStatic m_pin_static;
-	CComboBox m_pin_combo;
-	CEdit m_info_edit;
-
-	std::map<CLSID, CString> m_CachedExternalFilters;
-	static std::map<CLSID, CString> m_CachedRegistryFilters;
-public:
-	CPinInfoWnd();
-
-	bool OnConnect(const std::list<CComQIPtr<IUnknown, &IID_IUnknown>>& pUnks);
-	void OnDisconnect();
-	bool OnActivate();
-	void OnDeactivate();
-	bool OnApply();
-
-	static LPCWSTR GetWindowTitle() { return L"Pin Info"; }
-	static CSize GetWindowSize() { return CSize(0, 0); }
-
-	DECLARE_MESSAGE_MAP()
-
-	void OnCbnSelchangeCombo1();
-
-protected:
-	virtual BOOL OnWndMsg(UINT message, WPARAM wParam, LPARAM lParam, LRESULT* pResult);
-};
