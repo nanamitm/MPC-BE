@@ -521,7 +521,12 @@ bool CFormatConverter::Converting(BYTE* dst, AVFrame* pFrame)
 	int outStride = m_dstStride;
 	// Check if we have proper pixel alignment and the dst memory is actually aligned
 	if (m_RequiredAlignment && FFALIGN(m_dstStride, m_RequiredAlignment) != m_dstStride || ((uintptr_t)dst % 16u)) {
-		outStride = FFALIGN(outStride, m_RequiredAlignment);
+		// FFALIGN(x, 0) folds to 0 (x & ~(-1)), not x - guard against that or an
+		// unaligned dst with m_RequiredAlignment == 0 (e.g. plain NV12 passthrough)
+		// zeroes outStride, undersizing m_pAlignedBuffer and overflowing it below.
+		if (m_RequiredAlignment) {
+			outStride = FFALIGN(outStride, m_RequiredAlignment);
+		}
 		size_t requiredSize = (outStride * m_planeHeight * swof.bpp) >> 3;
 		if (requiredSize > m_nAlignedBufferSize) {
 			av_freep(&m_pAlignedBuffer);
