@@ -8,25 +8,19 @@ player or any of its other filters.
 
 ## Why this exists
 
-Two bugs surfaced while running this decoder under
-[BonDriver_dantto4k](https://github.com/0p1pkt2/dantto4k)-fed 4K/8K
-broadcast streams in [TVTest](https://github.com/DBCTRADO/TVTest):
+This fork carries a couple of D3D11 decode fixes on top of upstream
+[MPC-BE](https://github.com/Aleksoid1978/MPC-BE), worked out while running
+this decoder under [BonDriver_dantto4k](https://github.com/0p1pkt2/dantto4k)-fed
+4K/8K broadcast streams in [TVTest](https://github.com/DBCTRADO/TVTest):
 
-- **Dangling pointer crash on a 4K→8K format switch** in the DXVA2/D3D11
-  hwaccel packet path (`FillAVPacket`). Reported as
-  [Aleksoid1978/MPC-BE#1163](https://github.com/Aleksoid1978/MPC-BE/pull/1163);
-  upstream fixed it with their own commit, and this fork's code matches that
-  fix.
-- **Spurious `EC_DISPLAY_CHANGED` on every output format change**, which
-  makes the default DirectShow filter graph manager stop and restart the
-  whole graph, occasionally leaving D3D11 device creation in a bad state
-  (no video on startup or after a renderer switch). Proposed in
-  [Aleksoid1978/MPC-BE#1165](https://github.com/Aleksoid1978/MPC-BE/pull/1165),
-  but the maintainer wasn't convinced it was the right fix, so for now it
-  only lives here.
+- A dangling pointer crash on a 4K→8K format switch in the DXVA2/D3D11
+  hwaccel packet path (`FillAVPacket`).
+- Output format changes no longer trigger `EC_DISPLAY_CHANGED`, which used
+  to make the filter graph manager stop and restart the whole graph -
+  occasionally leaving D3D11 device creation in a bad state (no video on
+  startup or after a renderer switch).
 
-This fork now develops and distributes its own MPCVideoDec.ax
-independently, rather than continuing to open PRs upstream for it.
+This fork builds and distributes its own MPCVideoDec.ax independently.
 
 ## Getting the decoder
 
