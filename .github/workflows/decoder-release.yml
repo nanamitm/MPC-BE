@@ -1,13 +1,14 @@
 name: Build and release MPCVideoDec.ax
 
-# Standalone-decoder distribution for this fork's own fixes that upstream
-# (Aleksoid1978/MPC-BE) didn't take - see:
-#   https://github.com/Aleksoid1978/MPC-BE/pull/1165
-# Builds only the MPCVideoDec filter (x64), not the rest of MPC-BE.
+# Standalone-decoder distribution for this fork's own MPCVideoDec fixes/
+# improvements, developed independently of upstream (Aleksoid1978/MPC-BE) -
+# see https://github.com/Aleksoid1978/MPC-BE/pull/1165 for why the first one
+# of these didn't get merged upstream. Builds only the MPCVideoDec filter
+# (x64), not the rest of MPC-BE.
 
 on:
   push:
-    branches: [decoder-release]
+    branches: [master]
     tags: ['decoder-v*']
   workflow_dispatch:
 
