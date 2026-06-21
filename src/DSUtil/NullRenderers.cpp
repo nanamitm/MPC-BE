@@ -389,7 +389,6 @@ HRESULT CNullUVideoRenderer::CheckMediaType(const CMediaType* pmt)
 		   : E_FAIL;
 }
 
-#include "filters/renderer/VideoRenderers/Utils.h"
 HRESULT CNullUVideoRenderer::DoRenderSample(IMediaSample* pSample)
 {
 #if _DEBUG && 0

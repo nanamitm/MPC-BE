@@ -35,16 +35,24 @@
 #include "DSUtil/SysVersion.h"
 #include "DSUtil/DXVAState.h"
 #include "DSUtil/VideoParser.h"
-#include "filters/parser/AviSplitter/AviSplitter.h"
-#include "filters/parser/OggSplitter/OggSplitter.h"
-#include "filters/parser/MpegSplitter/MpegSplitter.h"
-#include "filters/parser/FLVSplitter/FLVSplitter.h"
 #include "filters/Lock.h"
 #include <FilterInterfaces.h>
 
 #include "mvrInterfaces.h"
 
 #include "DxgiUtils.h"
+
+// Forward declarations (CLSID only, no definition) for the upstream splitter
+// filters this fork no longer builds. InitDecoder() only needs __uuidof() on
+// these to recognize which splitter feeds it, not the splitters themselves.
+class __declspec(uuid("DC257063-045F-4BE2-BD5B-E12279C464F0")) CMpegSplitterFilter;
+class __declspec(uuid("1365BE7A-C86A-473C-9A41-C0A6E82C9FA3")) CMpegSourceFilter;
+class __declspec(uuid("9736D831-9D6C-4E72-B6E7-560EF9181001")) CAviSplitterFilter;
+class __declspec(uuid("CEA8DEFF-0AF7-4DB9-9A38-FB3C3AEFC0DE")) CAviSourceFilter;
+class __declspec(uuid("9FF48807-E133-40AA-826F-9B2959E5232D")) COggSplitterFilter;
+class __declspec(uuid("6D3688CE-3E9D-42F4-92CA-8A11119D25CD")) COggSourceFilter;
+class __declspec(uuid("47E792CF-0BBE-4F7A-859C-194B0768650A")) CFLVSplitterFilter;
+class __declspec(uuid("C9ECE7B3-1D8E-41F5-9F24-B255DF16C087")) CFLVSourceFilter;
 
 #pragma warning(push)
 #pragma warning(disable: 4005)
