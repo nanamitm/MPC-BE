@@ -26,6 +26,23 @@ extern "C" {
 }
 #include "DxgiUtils.h"
 
+namespace {
+	constexpr UINT PCI_VENDOR_NVIDIA = 0x10DE;
+
+	bool IsNvidiaAdapterPresent()
+	{
+		std::list<DXGI_ADAPTER_DESC> dxgi_adapters;
+		if (SUCCEEDED(GetDxgiAdapters(dxgi_adapters))) {
+			for (const auto& dxgi_adapter : dxgi_adapters) {
+				if (dxgi_adapter.VendorId == PCI_VENDOR_NVIDIA) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+}
+
 //
 // CMPCVideoDecSettingsWnd
 //
@@ -57,6 +74,7 @@ void CMPCVideoDecSettingsWnd::UpdateStatusInfo()
 	m_edtInputFormat.SetWindowTextW(m_pMDF->GetInformation(INFO_InputFormat));
 	m_edtFrameSize.SetWindowTextW(m_pMDF->GetInformation(INFO_FrameSize));
 	m_edtOutputFormat.SetWindowTextW(m_pMDF->GetInformation(INFO_OutputFormat));
+	m_edtActiveDecoder.SetWindowTextW(m_pMDF->GetInformation(INFO_ActiveDecoder));
 	m_edtGraphicsAdapter.SetWindowTextW(m_pMDF->GetInformation(INFO_GraphicsAdapter));
 }
 
@@ -152,19 +170,19 @@ bool CMPCVideoDecSettingsWnd::OnActivate()
 	CalcTextRect(rect, x1, y, label_w-24);
 	m_txtHWDecoder.Create(ResStr(IDS_VDF_HW_PREFERRED_DECODER), WS_VISIBLE | WS_CHILD, rect, this, (UINT)IDC_STATIC);
 	CalcRect(rect, x2, y, control_w, 200); rect.top -= 4;
-	m_cbHWDecoder.Create(dwStyle | CBS_DROPDOWNLIST | WS_VSCROLL, rect, this, IDC_PP_HW_DECODER);
+	m_cbHWDecoder.Create(dwStyle | CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_VSCROLL, rect, this, IDC_PP_HW_DECODER);
+
+	for (bool& available : m_HWDecAvailable) {
+		available = true;
+	}
+	m_HWDecAvailable[HWDec_D3D11cb] = SysVersion::IsWin8orLater();
+	m_HWDecAvailable[HWDec_D3D12cb] = SysVersion::IsWin10orLater();
+	m_HWDecAvailable[HWDec_NVDEC]   = IsNvidiaAdapterPresent();
+
 	m_cbHWDecoder.AddString(L"DXVA2");
 	m_cbHWDecoder.AddString(L"D3D11, DXVA2");
-	str = L"D3D11cb";
-	if (!SysVersion::IsWin8orLater()) {
-		str.Append(L" (not available)");
-	}
-	m_cbHWDecoder.AddString(str);
-	str = L"D3D12cb";
-	if (!SysVersion::IsWin10orLater()) {
-		str.Append(L" (not available)");
-	}
-	m_cbHWDecoder.AddString(str);
+	m_cbHWDecoder.AddString(L"D3D11cb");
+	m_cbHWDecoder.AddString(L"D3D12cb");
 	m_cbHWDecoder.AddString(L"NVDEC (Nvidia only)");
 	y += 28;
 
@@ -196,7 +214,7 @@ bool CMPCVideoDecSettingsWnd::OnActivate()
 	label_w = 124;
 	control_w = row_w - label_w;
 	x2 = x1 + label_w;
-	CalcRect(rect, x0, y, group_w, 88);
+	CalcRect(rect, x0, y, group_w, 104);
 	m_grpStatus.Create(ResStr(IDS_VDF_STATUS), WS_VISIBLE | WS_CHILD | BS_GROUPBOX, rect, this, (UINT)IDC_STATIC);
 	y += 20;
 
@@ -216,6 +234,12 @@ bool CMPCVideoDecSettingsWnd::OnActivate()
 	m_txtOutputFormat.Create(ResStr(IDS_VDF_STATUS_OUTPUT), WS_VISIBLE | WS_CHILD, rect, this, (UINT)IDC_STATIC);
 	CalcTextRect(rect, x2, y, control_w);
 	m_edtOutputFormat.Create(WS_CHILD | WS_VISIBLE | ES_READONLY, rect, this, 0);
+	y += 16;
+
+	CalcTextRect(rect, x1, y, label_w);
+	m_txtActiveDecoder.Create(ResStr(IDS_VDF_STATUS_DECODER), WS_VISIBLE | WS_CHILD, rect, this, (UINT)IDC_STATIC);
+	CalcTextRect(rect, x2, y, control_w);
+	m_edtActiveDecoder.Create(WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_READONLY, rect, this, 0);
 	y += 16;
 
 	CalcTextRect(rect, x1, y, label_w);
@@ -384,7 +408,8 @@ bool CMPCVideoDecSettingsWnd::OnActivate()
 		UpdateStatusInfo();
 	}
 
-	OnCbnChangeHwDec();
+	m_nHWDecoderSel = m_cbHWDecoder.GetCurSel();
+	UpdateHWAdapterCombo();
 	OnBnClickedConvertToRGB();
 
 	SetCursor(m_hWnd, IDC_ARROW);
@@ -402,6 +427,7 @@ void CMPCVideoDecSettingsWnd::OnDeactivate()
 	m_edtInputFormat.SetSel(-1);
 	m_edtFrameSize.SetSel(-1);
 	m_edtOutputFormat.SetSel(-1);
+	m_edtActiveDecoder.SetSel(-1);
 	m_edtGraphicsAdapter.SetSel(-1);
 }
 
@@ -480,9 +506,25 @@ BEGIN_MESSAGE_MAP(CMPCVideoDecSettingsWnd, CInternalPropertyPageWnd)
 	ON_BN_CLICKED(IDC_PP_RESET, OnBnClickedReset)
 	ON_NOTIFY_EX(TTN_NEEDTEXTW, 0, OnToolTipNotify)
 	ON_WM_TIMER()
+	ON_WM_MEASUREITEM()
+	ON_WM_DRAWITEM()
 END_MESSAGE_MAP()
 
 void CMPCVideoDecSettingsWnd::OnCbnChangeHwDec()
+{
+	// Owner-draw items still allow selection via mouse/keyboard, so reject
+	// it here and snap back to the last valid choice.
+	const int sel = m_cbHWDecoder.GetCurSel();
+	if (sel >= 0 && sel < HWDec_count && !m_HWDecAvailable[sel]) {
+		m_cbHWDecoder.SetCurSel(m_nHWDecoderSel);
+		return;
+	}
+	m_nHWDecoderSel = sel;
+
+	UpdateHWAdapterCombo();
+}
+
+void CMPCVideoDecSettingsWnd::UpdateHWAdapterCombo()
 {
 	m_cbHWAdapter.ResetContent();
 
@@ -544,6 +586,7 @@ void CMPCVideoDecSettingsWnd::OnBnClickedReset()
 	}
 
 	m_cbHWDecoder.SetCurSel(SysVersion::IsWin8orLater() ? HWDec_D3D11 : HWDec_DXVA2);
+	m_nHWDecoderSel = m_cbHWDecoder.GetCurSel();
 	m_cbHWAdapter.SetCurSel(0);
 	m_iD3D11Adapter = 0;
 
@@ -606,6 +649,54 @@ void CMPCVideoDecSettingsWnd::OnTimer(UINT_PTR nIDEvent)
 	else {
 		__super::OnTimer(nIDEvent);
 	}
+}
+
+void CMPCVideoDecSettingsWnd::OnMeasureItem(int nIDCtl, LPMEASUREITEMSTRUCT lpMeasureItemStruct)
+{
+	if (nIDCtl == IDC_PP_HW_DECODER) {
+		lpMeasureItemStruct->itemHeight = m_fontheight + ScaleY(6);
+	}
+}
+
+void CMPCVideoDecSettingsWnd::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct)
+{
+	if (nIDCtl != IDC_PP_HW_DECODER) {
+		return;
+	}
+
+	CDC dc;
+	dc.Attach(lpDrawItemStruct->hDC);
+
+	const int  itemID     = (int)lpDrawItemStruct->itemID;
+	const bool bHasItem   = itemID >= 0 && itemID < HWDec_count;
+	const bool bAvailable = bHasItem && m_HWDecAvailable[itemID];
+	const bool bSelected  = bAvailable && (lpDrawItemStruct->itemState & ODS_SELECTED);
+
+	const COLORREF clrBack = bSelected ? ::GetSysColor(COLOR_HIGHLIGHT) : ::GetSysColor(COLOR_WINDOW);
+	const COLORREF clrText = bSelected  ? ::GetSysColor(COLOR_HIGHLIGHTTEXT)
+						   : bAvailable ? ::GetSysColor(COLOR_WINDOWTEXT)
+						   :              ::GetSysColor(COLOR_GRAYTEXT);
+
+	CBrush brush(clrBack);
+	dc.FillRect(&lpDrawItemStruct->rcItem, &brush);
+
+	if (bHasItem) {
+		CString text;
+		m_cbHWDecoder.GetLBText(itemID, text);
+
+		dc.SetTextColor(clrText);
+		dc.SetBkMode(TRANSPARENT);
+
+		CRect rcText(lpDrawItemStruct->rcItem);
+		rcText.left += ScaleX(2);
+		dc.DrawTextW(text, &rcText, DT_SINGLELINE | DT_VCENTER | DT_LEFT | DT_NOPREFIX);
+	}
+
+	if (bAvailable && (lpDrawItemStruct->itemState & ODS_FOCUS)) {
+		dc.DrawFocusRect(&lpDrawItemStruct->rcItem);
+	}
+
+	dc.Detach();
 }
 
 // ====== Codec filter property page (for standalone filter only)

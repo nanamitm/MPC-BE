@@ -96,6 +96,7 @@ private:
 	AVFrame*								m_pHWFrame = nullptr;
 	AVPacket*								m_pPacket = nullptr;
 	enum AVCodecID							m_CodecId;
+	MPCHwCodec								m_HwCodecCategory = HWCodec_None; // HW codec category of m_CodecId, for HW-vs-software fallback reporting
 	REFERENCE_TIME							m_rtAvrTimePerFrame = 0;
 	bool									m_bCalculateStopTime = false;
 

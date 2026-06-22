@@ -124,6 +124,7 @@ enum MPCInfo {
 	INFO_InputFormat,
 	INFO_FrameSize,
 	INFO_OutputFormat,
+	INFO_ActiveDecoder,
 	INFO_GraphicsAdapter
 };
 

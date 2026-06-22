@@ -151,6 +151,7 @@ BEGIN
     IDS_VDF_STATUS_INPUT         "Input format:"
     IDS_VDF_STATUS_FRAMESIZE     "Frame size:"
     IDS_VDF_STATUS_OUTPUT        "Output format:"
+    IDS_VDF_STATUS_DECODER       "Decoder:"
     IDS_VDF_STATUS_ADAPTER       "Graphics Adapter:"
 END
 

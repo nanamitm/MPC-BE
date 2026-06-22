@@ -2203,6 +2203,7 @@ HRESULT CMPCVideoDecFilter::InitDecoder(const CMediaType* pmt)
 				return VFW_E_TYPE_NOT_ACCEPTED;
 			}
 			m_CodecId = ffCodecs[nNewCodec].nFFCodec;
+			m_HwCodecCategory = ffCodecs[nNewCodec].HwCodec;
 
 			if (m_hwType == HwType::DXVA2) {
 				if (m_pD3D11Decoder) {
@@ -5099,16 +5100,34 @@ STDMETHODIMP_(CString) CMPCVideoDecFilter::GetInformation(MPCInfo index)
 			break;
 		case INFO_OutputFormat:
 			if (GUID* DxvaGuid = GetDXVADecoderGuid()) {
-				infostr.Format(L"%s (%s)", UseDXVA2() ? L"DXVA2" : L"D3D11", GetDXVAModeString(*DxvaGuid));
+				infostr = GetDXVAModeString(*DxvaGuid);
+				break;
+			}
+			if (const SW_OUT_FMT* swof = GetSWOF(m_FormatConverter.GetOutPixFormat())) {
+				infostr.Format(L"%s (%d-bit %s)", swof->desc.name, swof->desc.cdepth, GetChromaSubsamplingStr(swof->av_pix_fmt));
+			}
+			break;
+		case INFO_ActiveDecoder:
+			if (m_pMSDKDecoder) {
+				infostr = m_pMSDKDecoder->GetHwAcceleration() ? L"QuickSync (MVC)" : L"Software (MVC)";
+				break;
+			}
+			if (GetDXVADecoderGuid()) {
+				infostr = UseDXVA2() ? L"DXVA2" : L"D3D11";
 				break;
 			}
 			switch (m_hwType) {
-				case HwType::D3D11CopyBack: infostr = L"D3D11 Copy-back: "; break;
-				case HwType::D3D12CopyBack: infostr = L"D3D12 Copy-back: "; break;
-				case HwType::NVDEC:         infostr = L"NVDEC: ";           break;
-			}
-			if (const SW_OUT_FMT* swof = GetSWOF(m_FormatConverter.GetOutPixFormat())) {
-				infostr.AppendFormat(L"%s (%d-bit %s)", swof->desc.name, swof->desc.cdepth, GetChromaSubsamplingStr(swof->av_pix_fmt));
+				case HwType::D3D11CopyBack: infostr = L"D3D11 Copy-back"; break;
+				case HwType::D3D12CopyBack: infostr = L"D3D12 Copy-back"; break;
+				case HwType::NVDEC:         infostr = L"NVDEC";           break;
+				default: {
+					// HW was requested for this codec but the active path fell back to software.
+					const bool bHwRequested = m_bUseFFmpeg && m_bEnableHwDecoding
+											   && m_HwCodecCategory != HWCodec_None
+											   && m_bHwCodecs[m_HwCodecCategory];
+					infostr = bHwRequested ? L"Software (hardware decoder unavailable)" : L"Software";
+					break;
+				}
 			}
 			break;
 		case INFO_GraphicsAdapter:

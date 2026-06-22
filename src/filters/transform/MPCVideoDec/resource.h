@@ -33,6 +33,7 @@
 #define IDS_VDF_STATUS_FRAMESIZE        7442
 #define IDS_VDF_STATUS_OUTPUT           7443
 #define IDS_VDF_STATUS_ADAPTER          7444
+#define IDS_VDF_STATUS_DECODER          7445
 #define IDS_VDF_TT_AR                   7450
 #define IDS_VDF_TT_PRESET               7451
 #define IDS_VDF_TT_STANDARD             7452
