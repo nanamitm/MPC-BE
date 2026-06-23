@@ -1,4 +1,4 @@
-name: Build and release MPCVideoDec.ax
+name: Build and release MPCVideoDec-fork.ax
 
 # Standalone-decoder distribution for this fork's own MPCVideoDec fixes/
 # improvements, developed independently of upstream (Aleksoid1978/MPC-BE) -
@@ -40,7 +40,7 @@ jobs:
           .\\update_gcc.bat
         shell: pwsh
 
-      - name: Build MPCVideoDec (x64 Release)
+      - name: Build MPCVideoDec-fork (x64 Release)
         run: |
           .\\build.bat Build x64 Filters Release NoWait
         shell: pwsh
@@ -48,8 +48,8 @@ jobs:
       - name: Stage release files
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item _bin\Filters_x64\MPCVideoDec.ax dist\
-          Copy-Item _bin\Filters_x64\MPCVideoDec.pdb dist\ -ErrorAction SilentlyContinue
+          Copy-Item _bin\Filters_x64\MPCVideoDec-fork.ax dist\
+          Copy-Item _bin\Filters_x64\MPCVideoDec-fork.pdb dist\ -ErrorAction SilentlyContinue
         shell: pwsh
 
       - name: Upload build artifact
