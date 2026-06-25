@@ -315,12 +315,17 @@ STDMETHODIMP CInternalPropertyPage::GetPageInfo(PROPPAGEINFO* pPageInfo)
 		return hr;
 	}
 
+	CDPI dpi;
+	CSize size = GetWindowSize();
+	size.cx = dpi.ScaleX(size.cx);
+	size.cy = dpi.ScaleY(size.cy);
+
 	pPageInfo->cb = sizeof(PROPPAGEINFO);
 	pPageInfo->pszTitle = pszTitle;
 	pPageInfo->pszDocString = nullptr;
 	pPageInfo->pszHelpFile = nullptr;
 	pPageInfo->dwHelpContext = 0;
-	pPageInfo->size = GetWindowSize();
+	pPageInfo->size = size;
 
 	return S_OK;
 }
