@@ -121,8 +121,6 @@ class __declspec(uuid("5A475F68-643B-4295-9B9D-2EAF8071F72E"))
 	std::vector<MPC_ADAPTER_DESC>m_D3D11Adapters;
 	int m_iD3D11Adapter = 0;
 
-	bool m_HWDecAvailable[HWDec_count] = {};
-	int  m_nHWDecoderSel = 0;
 
 	const UINT_PTR m_nTimerID = 1;
 
@@ -151,8 +149,7 @@ public:
 	afx_msg void OnBnClickedReset();
 	afx_msg BOOL OnToolTipNotify(UINT id, NMHDR * pNMHDR, LRESULT * pResult);
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
-	afx_msg void OnMeasureItem(int nIDCtl, LPMEASUREITEMSTRUCT lpMeasureItemStruct);
-	afx_msg void OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct);
+
 };
 
 #ifdef REGISTER_FILTER

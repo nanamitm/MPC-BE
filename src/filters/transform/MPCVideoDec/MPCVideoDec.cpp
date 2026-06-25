@@ -99,7 +99,41 @@ static LPCWSTR hwdec_opt_names[] = {
 	L"Hw_AV1",
 };
 
+static const struct {
+	MPCHwDecoder value;
+	LPCWSTR      name;
+} hwdecoder_names[] = {
+	{ HWDec_DXVA2,   L"dxva2" },
+	{ HWDec_D3D11,   L"d3d11" },
+	{ HWDec_D3D11cb, L"d3d11cb" },
+	{ HWDec_D3D12cb, L"d3d12cb" },
+	{ HWDec_NVDEC,   L"nvdec" },
+};
+
 static_assert(std::size(hwdec_opt_names) == HWCodec_count, "bad hwdec_opt_names!");
+static_assert(std::size(hwdecoder_names) == HWDec_count, "bad hwdecoder_names!");
+
+static LPCWSTR GetHwDecoderName(const MPCHwDecoder hwDecoder)
+{
+	for (const auto& item : hwdecoder_names) {
+		if (item.value == hwDecoder) {
+			return item.name;
+		}
+	}
+
+	return hwdecoder_names[SysVersion::IsWin8orLater() ? HWDec_D3D11 : HWDec_DXVA2].name;
+}
+
+static MPCHwDecoder GetHwDecoderByName(LPCWSTR name)
+{
+	for (const auto& item : hwdecoder_names) {
+		if (_wcsicmp(item.name, name) == 0) {
+			return item.value;
+		}
+	}
+
+	return SysVersion::IsWin8orLater() ? HWDec_D3D11 : HWDec_DXVA2;
+}
 
 #define MAX_AUTO_THREADS 32
 
@@ -1144,9 +1178,11 @@ CMPCVideoDecFilter::CMPCVideoDecFilter(LPUNKNOWN lpunk, HRESULT* phr)
 				m_bHwCodecs[i] = !!dw;
 			}
 		}
-		if (ERROR_SUCCESS == key.QueryDWORDValue(OPT_HwDecoder, dw)) {
-			m_nHwDecoder = (MPCHwDecoder)discard<int>(dw, HWDec_D3D11, 0, HWDec_count-1);
+		len = std::size(buff);
+		if (ERROR_SUCCESS == key.QueryStringValue(OPT_HwDecoder, buff, &len) && len > 0) {
+			m_nHwDecoder = GetHwDecoderByName(buff);
 		}
+		len = std::size(buff);
 		if (ERROR_SUCCESS == key.QueryStringValue(OPT_HwAdapter, buff, &len) && len > 3) {
 			UINT a, b;
 			if (swscanf_s(buff, L"%04X:%04X", &a, &b) == 2) {
@@ -1197,8 +1233,8 @@ CMPCVideoDecFilter::CMPCVideoDecFilter(LPUNKNOWN lpunk, HRESULT* phr)
 	for (int i = 0; i < HWCodec_count; i++) {
 		profile.ReadBool(OPT_SECTION_VideoDec, hwdec_opt_names[i], m_bHwCodecs[i]);
 	}
-	if (profile.ReadInt(OPT_SECTION_VideoDec, OPT_HwDecoder, value, 0, HWDec_count - 1)) {
-		m_nHwDecoder = (MPCHwDecoder)value;
+	if (CStringW str; profile.ReadString(OPT_SECTION_VideoDec, OPT_HwDecoder, str)) {
+		m_nHwDecoder = GetHwDecoderByName(str);
 	}
 	if (CStringW str; profile.ReadString(OPT_SECTION_VideoDec, OPT_HwAdapter, str)) {
 		UINT a, b;
@@ -4741,7 +4777,7 @@ STDMETHODIMP CMPCVideoDecFilter::SaveSettings()
 		for (int i = 0; i < HWCodec_count; i++) {
 			key.SetDWORDValue(hwdec_opt_names[i], m_bHwCodecs[i]);
 		}
-		key.SetDWORDValue(OPT_HwDecoder, m_nHwDecoder);
+		key.SetStringValue(OPT_HwDecoder, GetHwDecoderName(m_nHwDecoder));
 		CStringW str;
 		str.Format(L"%04X:%04X", m_HwAdapter.VendorId, m_HwAdapter.DeviceId);
 		key.SetStringValue(OPT_HwAdapter, str);
@@ -4771,7 +4807,7 @@ STDMETHODIMP CMPCVideoDecFilter::SaveSettings()
 	for (int i = 0; i < HWCodec_count; i++) {
 		profile.WriteInt(OPT_SECTION_VideoDec, hwdec_opt_names[i], m_bHwCodecs[i]);
 	}
-	profile.WriteInt(OPT_SECTION_VideoDec, OPT_HwDecoder, m_nHwDecoder);
+	profile.WriteString(OPT_SECTION_VideoDec, OPT_HwDecoder, GetHwDecoderName(m_nHwDecoder));
 	CStringW str;
 	str.Format(L"%04X:%04X", m_HwAdapter.VendorId, m_HwAdapter.DeviceId);
 	profile.WriteString(OPT_SECTION_VideoDec, OPT_HwAdapter, str);

@@ -30,6 +30,11 @@ extern "C" {
 namespace {
 	constexpr UINT PCI_VENDOR_NVIDIA = 0x10DE;
 
+	struct HWDecoderComboItem {
+		MPCHwDecoder value;
+		LPCWSTR      text;
+	};
+
 	bool IsNvidiaAdapterPresent()
 	{
 		std::list<DXGI_ADAPTER_DESC> dxgi_adapters;
@@ -41,6 +46,27 @@ namespace {
 			}
 		}
 		return false;
+	}
+
+	int FindHWDecoderComboIndex(const CComboBox& combo, const MPCHwDecoder value)
+	{
+		for (int i = 0, count = combo.GetCount(); i < count; i++) {
+			if ((MPCHwDecoder)combo.GetItemData(i) == value) {
+				return i;
+			}
+		}
+
+		return CB_ERR;
+	}
+
+	MPCHwDecoder GetSelectedHWDecoder(const CComboBox& combo)
+	{
+		const int sel = combo.GetCurSel();
+		if (sel >= 0) {
+			return (MPCHwDecoder)combo.GetItemData(sel);
+		}
+
+		return SysVersion::IsWin8orLater() ? HWDec_D3D11 : HWDec_DXVA2;
 	}
 }
 
@@ -171,20 +197,27 @@ bool CMPCVideoDecSettingsWnd::OnActivate()
 	CalcTextRect(rect, x1, y, label_w-24);
 	m_txtHWDecoder.Create(ResStr(IDS_VDF_HW_PREFERRED_DECODER), WS_VISIBLE | WS_CHILD, rect, this, (UINT)IDC_STATIC);
 	CalcRect(rect, x2, y, control_w, 200); rect.top -= 4;
-	m_cbHWDecoder.Create(dwStyle | CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_VSCROLL, rect, this, IDC_PP_HW_DECODER);
+	m_cbHWDecoder.Create(dwStyle | CBS_DROPDOWNLIST | WS_VSCROLL, rect, this, IDC_PP_HW_DECODER);
 
-	for (bool& available : m_HWDecAvailable) {
-		available = true;
+	const HWDecoderComboItem hwDecoders[] = {
+		{ HWDec_DXVA2,   L"DXVA2" },
+		{ HWDec_D3D11,   L"D3D11, DXVA2" },
+		{ HWDec_D3D11cb, L"D3D11cb" },
+		{ HWDec_D3D12cb, L"D3D12cb" },
+		{ HWDec_NVDEC,   L"NVDEC (Nvidia only)" },
+	};
+
+	for (const auto& item : hwDecoders) {
+		if ((item.value == HWDec_D3D11 && !SysVersion::IsWin8orLater())
+				|| (item.value == HWDec_D3D11cb && !SysVersion::IsWin8orLater())
+				|| (item.value == HWDec_D3D12cb && !SysVersion::IsWin10orLater())
+				|| (item.value == HWDec_NVDEC && !IsNvidiaAdapterPresent())) {
+			continue;
+		}
+
+		const int index = m_cbHWDecoder.AddString(item.text);
+		m_cbHWDecoder.SetItemData(index, item.value);
 	}
-	m_HWDecAvailable[HWDec_D3D11cb] = SysVersion::IsWin8orLater();
-	m_HWDecAvailable[HWDec_D3D12cb] = SysVersion::IsWin10orLater();
-	m_HWDecAvailable[HWDec_NVDEC]   = IsNvidiaAdapterPresent();
-
-	m_cbHWDecoder.AddString(L"DXVA2");
-	m_cbHWDecoder.AddString(L"D3D11, DXVA2");
-	m_cbHWDecoder.AddString(L"D3D11cb");
-	m_cbHWDecoder.AddString(L"D3D12cb");
-	m_cbHWDecoder.AddString(L"NVDEC (Nvidia only)");
 	y += 28;
 
 	// D3D11 Adapter
@@ -358,7 +391,8 @@ bool CMPCVideoDecSettingsWnd::OnActivate()
 			m_cbHWCodec[i].SetCheck(!!m_pMDF->GetHwCodec((MPCHwCodec)i));
 		}
 
-		m_cbHWDecoder.SetCurSel(m_pMDF->GetHwDecoder());
+		const int hwDecoderIndex = FindHWDecoderComboIndex(m_cbHWDecoder, (MPCHwDecoder)m_pMDF->GetHwDecoder());
+		m_cbHWDecoder.SetCurSel(hwDecoderIndex != CB_ERR ? hwDecoderIndex : 0);
 
 		m_iD3D11Adapter = 0;
 		m_D3D11Adapters.clear();
@@ -409,7 +443,6 @@ bool CMPCVideoDecSettingsWnd::OnActivate()
 		UpdateStatusInfo();
 	}
 
-	m_nHWDecoderSel = m_cbHWDecoder.GetCurSel();
 	UpdateHWAdapterCombo();
 	OnBnClickedConvertToRGB();
 
@@ -447,7 +480,7 @@ bool CMPCVideoDecSettingsWnd::OnApply()
 			m_pMDF->SetHwCodec((MPCHwCodec)i, m_cbHWCodec[i].GetCheck() == BST_CHECKED);
 		}
 
-		m_pMDF->SetHwDecoder(m_cbHWDecoder.GetCurSel());
+		m_pMDF->SetHwDecoder(GetSelectedHWDecoder(m_cbHWDecoder));
 
 		if (m_cbHWAdapter.GetCount() > 1 && m_cbHWAdapter.GetCurSel() >= 0) {
 			m_iD3D11Adapter = m_cbHWAdapter.GetCurSel();
@@ -507,21 +540,10 @@ BEGIN_MESSAGE_MAP(CMPCVideoDecSettingsWnd, CInternalPropertyPageWnd)
 	ON_BN_CLICKED(IDC_PP_RESET, OnBnClickedReset)
 	ON_NOTIFY_EX(TTN_NEEDTEXTW, 0, OnToolTipNotify)
 	ON_WM_TIMER()
-	ON_WM_MEASUREITEM()
-	ON_WM_DRAWITEM()
 END_MESSAGE_MAP()
 
 void CMPCVideoDecSettingsWnd::OnCbnChangeHwDec()
 {
-	// Owner-draw items still allow selection via mouse/keyboard, so reject
-	// it here and snap back to the last valid choice.
-	const int sel = m_cbHWDecoder.GetCurSel();
-	if (sel >= 0 && sel < HWDec_count && !m_HWDecAvailable[sel]) {
-		m_cbHWDecoder.SetCurSel(m_nHWDecoderSel);
-		return;
-	}
-	m_nHWDecoderSel = sel;
-
 	UpdateHWAdapterCombo();
 }
 
@@ -529,7 +551,9 @@ void CMPCVideoDecSettingsWnd::UpdateHWAdapterCombo()
 {
 	m_cbHWAdapter.ResetContent();
 
-	if (SysVersion::IsWin8orLater() && (m_cbHWDecoder.GetCurSel() == HWDec_D3D11cb || m_cbHWDecoder.GetCurSel() == HWDec_D3D12cb) && m_D3D11Adapters.size()) {
+	const MPCHwDecoder hwDecoder = GetSelectedHWDecoder(m_cbHWDecoder);
+
+	if (SysVersion::IsWin8orLater() && (hwDecoder == HWDec_D3D11cb || hwDecoder == HWDec_D3D12cb) && m_D3D11Adapters.size()) {
 		for (const auto& adapter : m_D3D11Adapters) {
 			m_cbHWAdapter.AddString(adapter.Description);
 		}
@@ -586,8 +610,7 @@ void CMPCVideoDecSettingsWnd::OnBnClickedReset()
 		m_cbHWCodec[i].SetCheck(BST_CHECKED);
 	}
 
-	m_cbHWDecoder.SetCurSel(SysVersion::IsWin8orLater() ? HWDec_D3D11 : HWDec_DXVA2);
-	m_nHWDecoderSel = m_cbHWDecoder.GetCurSel();
+	m_cbHWDecoder.SetCurSel(FindHWDecoderComboIndex(m_cbHWDecoder, SysVersion::IsWin8orLater() ? HWDec_D3D11 : HWDec_DXVA2));
 	m_cbHWAdapter.SetCurSel(0);
 	m_iD3D11Adapter = 0;
 
@@ -652,53 +675,6 @@ void CMPCVideoDecSettingsWnd::OnTimer(UINT_PTR nIDEvent)
 	}
 }
 
-void CMPCVideoDecSettingsWnd::OnMeasureItem(int nIDCtl, LPMEASUREITEMSTRUCT lpMeasureItemStruct)
-{
-	if (nIDCtl == IDC_PP_HW_DECODER) {
-		lpMeasureItemStruct->itemHeight = m_fontheight + ScaleY(6);
-	}
-}
-
-void CMPCVideoDecSettingsWnd::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct)
-{
-	if (nIDCtl != IDC_PP_HW_DECODER) {
-		return;
-	}
-
-	CDC dc;
-	dc.Attach(lpDrawItemStruct->hDC);
-
-	const int  itemID     = (int)lpDrawItemStruct->itemID;
-	const bool bHasItem   = itemID >= 0 && itemID < HWDec_count;
-	const bool bAvailable = bHasItem && m_HWDecAvailable[itemID];
-	const bool bSelected  = bAvailable && (lpDrawItemStruct->itemState & ODS_SELECTED);
-
-	const COLORREF clrBack = bSelected ? ::GetSysColor(COLOR_HIGHLIGHT) : MPCDarkMode::BackColor(IsDarkMode());
-	const COLORREF clrText = bSelected  ? ::GetSysColor(COLOR_HIGHLIGHTTEXT)
-						   : bAvailable ? MPCDarkMode::TextColor(IsDarkMode())
-						   :              MPCDarkMode::GrayTextColor(IsDarkMode());
-
-	CBrush brush(clrBack);
-	dc.FillRect(&lpDrawItemStruct->rcItem, &brush);
-
-	if (bHasItem) {
-		CString text;
-		m_cbHWDecoder.GetLBText(itemID, text);
-
-		dc.SetTextColor(clrText);
-		dc.SetBkMode(TRANSPARENT);
-
-		CRect rcText(lpDrawItemStruct->rcItem);
-		rcText.left += ScaleX(2);
-		dc.DrawTextW(text, &rcText, DT_SINGLELINE | DT_VCENTER | DT_LEFT | DT_NOPREFIX);
-	}
-
-	if (bAvailable && (lpDrawItemStruct->itemState & ODS_FOCUS)) {
-		dc.DrawFocusRect(&lpDrawItemStruct->rcItem);
-	}
-
-	dc.Detach();
-}
 
 // ====== Codec filter property page (for standalone filter only)
 #ifdef REGISTER_FILTER
