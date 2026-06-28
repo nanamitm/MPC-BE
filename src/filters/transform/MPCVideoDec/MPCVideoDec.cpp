@@ -1861,6 +1861,7 @@ int CMPCVideoDecFilter::FindCodec(const CMediaType* mtIn, BOOL bForced/* = FALSE
 			if (m_bUseFFmpeg && m_bEnableHwDecoding && ffCodecs[i].HwCodec != HWCodec_None) {
 				if (m_bHwCodecs[ffCodecs[i].HwCodec]) {
 					m_hwType = HwType::DXVA2;
+					m_hwFallbackReason = HwFallbackReason::None;
 				}
 			}
 
@@ -2242,7 +2243,7 @@ HRESULT CMPCVideoDecFilter::InitDecoder(const CMediaType* pmt)
 			m_HwCodecCategory = ffCodecs[nNewCodec].HwCodec;
 
 			if (m_hwType == HwType::DXVA2) {
-				if (m_pD3D11Decoder) {
+				if (m_pD3D11Decoder && m_nHwDecoder == HWDec_D3D11) {
 					m_hwType = HwType::D3D11;
 				} else {
 					switch (m_nHwDecoder) {
@@ -2399,6 +2400,7 @@ HRESULT CMPCVideoDecFilter::InitDecoder(const CMediaType* pmt)
 
 		if (m_CodecId == AV_CODEC_ID_MPEG2VIDEO && bInterlacedFieldPerSample && m_nPCIVendor == PCIV_ATI
 				&& (m_hwType == HwType::DXVA2 || m_hwType == HwType::D3D11)) {
+			m_hwFallbackReason = HwFallbackReason::ATIInterlace;
 			m_hwType = HwType::None;
 		}
 
@@ -2625,12 +2627,14 @@ HRESULT CMPCVideoDecFilter::InitDecoder(const CMediaType* pmt)
 				int w, h;
 				GetPictSize(w, h);
 				if (!DXVACheckFramesize(w, h, m_nPCIVendor, m_nPCIDevice, m_VideoDriverVersion)) { // check frame size
+					m_hwFallbackReason = HwFallbackReason::FrameSize;
 					break;
 				}
 
 				if (m_CodecId == AV_CODEC_ID_H264) {
 					// check "Disable DXVA for SD (H.264)" option
 					if (m_nDXVA_SD && std::max(m_nSurfaceWidth, m_nSurfaceHeight) <= 1024 && std::min(m_nSurfaceWidth, m_nSurfaceHeight) <= 576) {
+						m_hwFallbackReason = HwFallbackReason::CodecCompatibility;
 						break;
 					}
 
@@ -2638,6 +2642,7 @@ HRESULT CMPCVideoDecFilter::InitDecoder(const CMediaType* pmt)
 						const int nCompat = FFH264CheckCompatibility(m_nSurfaceWidth, m_nSurfaceHeight, m_pAVCtx, m_nPCIVendor, m_nPCIDevice, m_VideoDriverVersion);
 
 						if ((nCompat & DXVA_PROFILE_HIGHER_THAN_HIGH) || (nCompat & DXVA_HIGH_BIT)) { // DXVA unsupported
+							m_hwFallbackReason = HwFallbackReason::CodecCompatibility;
 							break;
 						}
 
@@ -2652,11 +2657,13 @@ HRESULT CMPCVideoDecFilter::InitDecoder(const CMediaType* pmt)
 									break;
 							}
 							if (!bDXVACompatible) {
+								m_hwFallbackReason = HwFallbackReason::CodecCompatibility;
 								break;
 							}
 						}
 					}
 				} else if (!CheckDXVACompatible(m_CodecId, m_pAVCtx->pix_fmt, m_pAVCtx->profile)) {
+					m_hwFallbackReason = HwFallbackReason::CodecCompatibility;
 					break;
 				}
 
@@ -3161,6 +3168,7 @@ HRESULT CMPCVideoDecFilter::CompleteConnect(PIN_DIRECTION direction, IPin* pRece
 					&& mt.subtype != MEDIASUBTYPE_NV12 && mt.subtype != MEDIASUBTYPE_P010) {
 				DLog(L"CMPCVideoDecFilter::CompleteConnect() - wrong output media type '%s' for H/W decoding, fallback to software decoding", GetGUIDString(mt.subtype));
 
+				m_hwFallbackReason = HwFallbackReason::RendererFormat;
 				CleanupDXVAVariables();
 				CleanupD3DResources();
 				m_pDXVADecoder.reset();
@@ -3248,6 +3256,7 @@ HRESULT CMPCVideoDecFilter::CompleteConnect(PIN_DIRECTION direction, IPin* pRece
 				}
 
 				if (FAILED(hr)) {
+					m_hwFallbackReason = HwFallbackReason::GPUNotSupported;
 					CleanupDXVAVariables();
 					CleanupD3DResources();
 					m_pDXVADecoder.reset();
@@ -5161,7 +5170,22 @@ STDMETHODIMP_(CString) CMPCVideoDecFilter::GetInformation(MPCInfo index)
 					const bool bHwRequested = m_bUseFFmpeg && m_bEnableHwDecoding
 											   && m_HwCodecCategory != HWCodec_None
 											   && m_bHwCodecs[m_HwCodecCategory];
-					infostr = bHwRequested ? L"Software (hardware decoder unavailable)" : L"Software";
+					if (bHwRequested) {
+						if (m_hwType == HwType::DXVA2) {
+							infostr = L"Software (codec not DXVA2 compatible)";
+						} else {
+							switch (m_hwFallbackReason) {
+								case HwFallbackReason::RendererFormat:    infostr = L"Software (renderer format not NV12/P010)"; break;
+								case HwFallbackReason::FrameSize:         infostr = L"Software (frame size not supported)";       break;
+								case HwFallbackReason::CodecCompatibility: infostr = L"Software (codec/profile not supported)";   break;
+								case HwFallbackReason::GPUNotSupported:   infostr = L"Software (GPU not supported)";              break;
+								case HwFallbackReason::ATIInterlace:      infostr = L"Software (ATI interlace limitation)";       break;
+								default:                                   infostr = L"Software (hardware decoder unavailable)";   break;
+							}
+						}
+					} else {
+						infostr = L"Software";
+					}
 					break;
 				}
 			}

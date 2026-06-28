@@ -86,6 +86,12 @@ private:
 
 	bool									m_bEnableHwDecoding  = true; // internal (not saved)
 	bool									m_bDXVACompatible = true;
+
+	enum class HwFallbackReason : uint8_t {
+		None, RendererFormat, FrameSize, CodecCompatibility, GPUNotSupported, ATIInterlace
+	};
+	HwFallbackReason						m_hwFallbackReason = HwFallbackReason::None;
+
 	unsigned __int64						m_nActiveCodecs = CODECS_ALL & ~CODEC_H264_MVC;
 
 	// === FFMpeg variables
