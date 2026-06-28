@@ -316,6 +316,13 @@ STDMETHODIMP CInternalPropertyPage::GetPageInfo(PROPPAGEINFO* pPageInfo)
 	}
 
 	CDPI dpi;
+	if (m_pPageSite) {
+		CComQIPtr<IOleWindow> pOleWnd(m_pPageSite);
+		HWND hwndSite = nullptr;
+		if (pOleWnd && SUCCEEDED(pOleWnd->GetWindow(&hwndSite)) && hwndSite) {
+			dpi.UseCurentMonitorDPI(hwndSite);
+		}
+	}
 	CSize size = GetWindowSize();
 	size.cx = dpi.ScaleX(size.cx);
 	size.cy = dpi.ScaleY(size.cy);
