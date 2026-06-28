@@ -610,7 +610,8 @@ void CMPCVideoDecSettingsWnd::OnBnClickedReset()
 		m_cbHWCodec[i].SetCheck(BST_CHECKED);
 	}
 
-	m_cbHWDecoder.SetCurSel(FindHWDecoderComboIndex(m_cbHWDecoder, SysVersion::IsWin8orLater() ? HWDec_D3D11 : HWDec_DXVA2));
+	const int hwDecoderIndex = FindHWDecoderComboIndex(m_cbHWDecoder, SysVersion::IsWin8orLater() ? HWDec_D3D11 : HWDec_DXVA2);
+	m_cbHWDecoder.SetCurSel(hwDecoderIndex != CB_ERR ? hwDecoderIndex : 0);
 	m_cbHWAdapter.SetCurSel(0);
 	m_iD3D11Adapter = 0;
 
