@@ -211,6 +211,7 @@ bool CMPCVideoDecSettingsWnd::OnActivate()
 		{ HWDec_D3D12cb, L"D3D12cb" },
 		{ HWDec_NVDEC,   L"NVDEC (Nvidia only)" },
 	};
+	static_assert(std::size(hwDecoders) == HWDec_count, "bad hwDecoders!");
 
 	for (const auto& item : hwDecoders) {
 		if ((item.value == HWDec_D3D11 && !SysVersion::IsWin8orLater())
