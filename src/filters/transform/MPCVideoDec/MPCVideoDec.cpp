@@ -3896,6 +3896,7 @@ HRESULT CMPCVideoDecFilter::DecodeInternal(AVPacket *avpkt, REFERENCE_TIME rtSta
 				hr = device_hwctx->device_context->Map(m_pStagingD3D11Texture2D, 0, D3D11_MAP_READ, 0, &mappedResource);
 				if (FAILED(hr)) {
 					DLog(L"CMPCVideoDecFilter::DecodeInternal() : ID3D11DeviceContext::Map() failed : %s", HR2Str(hr));
+					device_hwctx->unlock(device_hwctx->lock_ctx);
 					av_frame_unref(frame);
 					continue;
 				}
